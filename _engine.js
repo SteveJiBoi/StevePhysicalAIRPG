@@ -1,0 +1,1185 @@
+
+/* =====================================================================
+   STEVE'S PHYSICAL AI RPG  —  vanilla JS engine
+   ===================================================================== */
+"use strict";
+
+/* =====================================================================
+   1. RADIAL GEOMETRY HELPERS
+   ===================================================================== */
+const CANVAS = 2400, CX = 1200, CY = 1200;
+function pol(a, r){ const rad = a * Math.PI / 180; return { x: CX + r * Math.cos(rad), y: CY - r * Math.sin(rad) }; }
+
+/* =====================================================================
+   2. SKILL TREE DATA  (foundational ring + 7 radiating star paths)
+   ===================================================================== */
+const NODES = [
+  /* ---------- CENTRAL HUB ---------- */
+  { id:'hub', name:'Robotics Builder', branch:'core', color:'#ffd700', icon:'box', tier:'hub',
+    a:0, r:0, xp:0, diff:'Origin', prereq:[],
+    desc:'Your core identity. From this hub, parallel branches radiate outward like a star. Master all seven points to converge on the legendary class: Physical AI Architect.' },
+
+  /* ====================== FOUNDATIONAL RING ====================== */
+  /* --- Mathematics (Neon Blue) --- */
+  { id:'math_la', name:'Linear Algebra', branch:'Mathematics', color:'#3b82f6', icon:'grid-3x3', tier:'foundation',
+    a:58, r:200, xp:10, diff:'Medium', credits:1, prereq:[],
+    topics:'Vectors, Matrices, Eigenvalues, Eigenvectors, SVD, Coordinate Transformations',
+    project:'Robot Arm Kinematics (+10 XP)',
+    resources:[{name:'MIT 18.06 Linear Algebra',url:'https://ocw.mit.edu/courses/18-06-linear-algebra-spring-2010/'},{name:'3Blue1Brown — Essence of Linear Algebra',url:'https://www.3blue1brown.com/topics/linear-algebra'}],
+    desc:'The language of robotics. Transformations, rotations and projections all live here.' },
+  { id:'math_calc', name:'Calculus', branch:'Mathematics', color:'#3b82f6', icon:'trending-up', tier:'foundation',
+    a:78, r:200, xp:10, diff:'Medium', credits:1, prereq:[],
+    topics:'Derivatives, Partial Derivatives, Jacobians, Gradient Descent',
+    resources:[{name:'MIT 18.01 Single Variable Calculus',url:'https://ocw.mit.edu/courses/18-01-single-variable-calculus-fall-2006/'},{name:'Khan Academy — Calculus',url:'https://www.khanacademy.org/math/calculus-1'}],
+    desc:'Gradients drive every learning algorithm; Jacobians drive every manipulator.' },
+  { id:'math_prob', name:'Probability & Stats', branch:'Mathematics', color:'#3b82f6', icon:'dice-5', tier:'foundation',
+    a:98, r:200, xp:15, diff:'Medium', credits:1, prereq:[],
+    topics:'Bayes Rule, Gaussian Distributions, Kalman Filter Foundations',
+    resources:[{name:'Harvard Stat 110',url:'https://projects.iq.harvard.edu/stat110/home'}],
+    desc:'Uncertainty is everywhere in the physical world. Bayes is how robots reason about it.' },
+  { id:'math_opt', name:'Optimization', branch:'Mathematics', color:'#3b82f6', icon:'git-commit-horizontal', tier:'foundation',
+    a:118, r:200, xp:15, diff:'Medium', credits:1, prereq:[],
+    topics:'Least Squares, Gradient Methods, Convex Optimization',
+    resources:[{name:'Stanford EE364A — Convex Optimization',url:'https://web.stanford.edu/class/ee364a/'}],
+    desc:'Trajectory optimization, control and learning are all optimization in disguise.' },
+
+  /* --- Physics (Neon Orange) --- */
+  { id:'phys_mech', name:'Classical Mechanics', branch:'Physics', color:'#f97316', icon:'orbit', tier:'foundation',
+    a:150, r:200, xp:15, diff:'Medium', credits:1, prereq:[],
+    topics:"Newton's Laws, Energy, Momentum, Torque, Robot Dynamics",
+    resources:[{name:'MIT 8.01 Classical Mechanics',url:'https://ocw.mit.edu/courses/8-01sc-classical-mechanics-fall-2016/'}],
+    desc:'Forces, torques and dynamics — the physics your robot actually obeys.' },
+  { id:'phys_elec', name:'Electricity & Electronics', branch:'Physics', color:'#f97316', icon:'zap', tier:'foundation',
+    a:168, r:200, xp:15, diff:'Medium', credits:1, prereq:[],
+    topics:'Circuits, Sensors, Encoders, Motor Drivers, Power Systems',
+    resources:[{name:'MIT 6.002 Circuits & Electronics',url:'https://ocw.mit.edu/courses/6-002-circuits-and-electronics-spring-2007/'},{name:'All About Circuits',url:'https://www.allaboutcircuits.com/textbook/'}],
+    desc:'Motors, encoders and drivers — the hardware that turns electrons into motion.' },
+  { id:'phys_signals', name:'Signals & Systems', branch:'Physics', color:'#f97316', icon:'audio-waveform', tier:'foundation',
+    a:186, r:200, xp:20, diff:'Hard', credits:2, prereq:[],
+    topics:'Frequency Domain, Fourier Transform, Filters, Control Systems',
+    resources:[{name:'MIT 6.003 Signals & Systems',url:'https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/'}],
+    desc:'Filtering noisy sensors and designing controllers begins in the frequency domain.' },
+
+  /* --- Computer Science (Neon Green) --- */
+  { id:'cs_python', name:'Python & PyTorch', branch:'Computer Science', color:'#22c55e', icon:'code-2', tier:'foundation',
+    a:312, r:200, xp:10, diff:'Easy', credits:1, prereq:[],
+    topics:'Advanced syntax, packages, tensors, autograd',
+    resources:[{name:'PyTorch Official Tutorials',url:'https://pytorch.org/tutorials/'}],
+    desc:'The lingua franca of robot learning. Tensors in, policies out.' },
+  { id:'cs_linux', name:'Linux Environment', branch:'Computer Science', color:'#22c55e', icon:'terminal', tier:'foundation',
+    a:332, r:200, xp:15, diff:'Medium', credits:1, prereq:[],
+    topics:'SSH, Docker, Git, Tmux',
+    resources:[{name:'MIT — The Missing Semester',url:'https://missing.csail.mit.edu/'}],
+    desc:'Every robot runs Linux. Master the shell, containers and version control.' },
+  { id:'cs_dsa', name:'Data Structures & Algorithms', branch:'Computer Science', color:'#22c55e', icon:'binary', tier:'foundation',
+    a:352, r:200, xp:25, diff:'Hard', credits:2, prereq:[],
+    topics:'Arrays, Trees, Graphs, BFS/DFS, Dynamic Programming',
+    resources:[{name:'NeetCode',url:'https://neetcode.io/'}],
+    desc:'Graph search powers motion planning; DP powers everything else.' },
+  { id:'cs_swe', name:'Software Engineering', branch:'Computer Science', color:'#22c55e', icon:'boxes', tier:'foundation',
+    a:18, r:200, xp:15, diff:'Medium', credits:1, prereq:[],
+    topics:'OOP, Testing, CI/CD, Design Patterns',
+    resources:[{name:'Refactoring Guru — Design Patterns',url:'https://refactoring.guru/design-patterns'}],
+    desc:'Robotics codebases are huge. Tests and patterns keep them from collapsing.' },
+
+  /* ====================== RADIATING STAR PATHS ====================== */
+  /* --- Path 1: Robotics Fundamentals (Neon Purple) --- */
+  { id:'rob_kin', name:'Kinematics Engine', branch:'Robotics Fundamentals', color:'#a855f7', icon:'move-3d', tier:'path', mastery:true,
+    a:90, r:380, xp:100, diff:'Legendary', credits:3,
+    prereq:['math_la','math_calc','math_prob','math_opt','phys_mech','phys_elec','phys_signals'],
+    topics:'Coordinate Frames, SE(2)/SE(3), Forward & Inverse Kinematics, Jacobians, Dynamics, Motion Planning (A*, Dijkstra, RRT, RRT*)',
+    title:'Robot Control Engineer',
+    resources:[{name:'Modern Robotics — Official Portal',url:'https://modernrobotics.northwestern.edu/'},{name:'Coursera — Modern Robotics Specialization',url:'https://www.coursera.org/specializations/modernrobotics'}],
+    desc:'Requires the full Math + Physics foundation. The heart of classical robotics — frames, kinematics and planning.' },
+
+  /* --- Path 2: ROS Ecosystem (Neon Cyan) --- */
+  { id:'ros_core', name:'ROS2 Core', branch:'ROS Ecosystem', color:'#06b6d4', icon:'network', tier:'path', mastery:true,
+    a:38.57, r:380, xp:100, diff:'Legendary', credits:3,
+    prereq:['cs_python','cs_linux','cs_dsa','cs_swe','rob_kin'],
+    topics:'Nodes, Topics, Services, Actions, TF Tree, RViz, MoveIt2, Gazebo, Isaac Sim',
+    title:'ROS Developer',
+    resources:[{name:'ROS 2 Documentation',url:'https://docs.ros.org/en/jazzy/index.html'},{name:'MoveIt 2 Tutorials',url:'https://moveit.picknik.ai/main/index.html'}],
+    desc:'Requires CS foundation + Robotics Fundamentals. The middleware that connects every robot subsystem.' },
+
+  /* --- Path 3: Perception (Neon Pink) --- */
+  { id:'perc_cv', name:'Computer Vision', branch:'Perception', color:'#ec4899', icon:'eye', tier:'path', mastery:true,
+    a:141.43, r:380, xp:120, diff:'Legendary', credits:3,
+    prereq:['math_la','math_calc','math_prob','math_opt','phys_mech','phys_elec','phys_signals'],
+    topics:'OpenCV, Camera Calibration, Depth Cameras, Point Clouds, Sensor Fusion, Kalman Filters, EKF',
+    title:'Perception Engineer',
+    resources:[{name:'OpenCV Tutorials',url:'https://docs.opencv.org/4.x/d9/df8/tutorial_root.html'},{name:'First Principles of Computer Vision',url:'https://fpcv.cs.columbia.edu/'}],
+    desc:'Requires the full Math + Physics foundation. Turning raw pixels and point clouds into a world model.' },
+
+  /* --- Path 4: SLAM (Neon Yellow) --- */
+  { id:'slam_se', name:'State Estimation & SLAM', branch:'SLAM', color:'#eab308', icon:'map-pinned', tier:'path', mastery:true,
+    a:192.86, r:380, xp:150, diff:'Legendary', credits:4,
+    prereq:['perc_cv'],
+    topics:'Localization, Mapping, Visual SLAM, ORB-SLAM3, VINS-Mono, Multi-Sensor Fusion',
+    title:'Autonomy Engineer',
+    resources:[{name:'ORB-SLAM3 (GitHub)',url:'https://github.com/UZ-SLAMLab/ORB_SLAM3'},{name:'Cyrill Stachniss — SLAM Course',url:'https://www.youtube.com/playlist?list=PLgnQpQtFTOGQrZ4O5QzbIHgl3b1JHimN_'}],
+    desc:'Requires Perception Path Mastery. Where am I, and what does the world look like? Solved simultaneously.' },
+
+  /* --- Path 5: Robot Learning (Neon Red) --- */
+  { id:'rl_il', name:'Imitation Learning', branch:'Robot Learning', color:'#ef4444', icon:'copy', tier:'path', boss:true,
+    a:347.14, r:340, xp:50, diff:'Hard', credits:2,
+    prereq:['cs_python','cs_dsa','math_la','math_calc','ros_core'],
+    topics:'Behavior Cloning, Action Chunking with Transformers (ACT)',
+    boss:'BOSS #1 — Train ACT on SO101 (Success Rate > 80%)',
+    resources:[{name:'ACT / ALOHA Project',url:'https://tonyzhaozh.github.io/aloha/'},{name:'LeRobot — Imitation Learning',url:'https://huggingface.co/docs/lerobot'}],
+    desc:'Requires CS + Math foundation + ROS Ecosystem. Teach the robot by showing it. Clone the demonstration distribution.' },
+  { id:'rl_diff', name:'Diffusion Models', branch:'Robot Learning', color:'#ef4444', icon:'waves', tier:'path', boss:true,
+    a:347.14, r:480, xp:75, diff:'Hard', credits:3,
+    prereq:['rl_il'],
+    topics:'Diffusion Policy mechanics, denoising action generation',
+    boss:'BOSS #2 — Train a Diffusion Policy',
+    resources:[{name:'Diffusion Policy Project',url:'https://diffusion-policy.cs.columbia.edu/'}],
+    desc:'Generate multi-modal action trajectories by denoising. State-of-the-art visuomotor control.' },
+  { id:'rl_rl', name:'Reinforcement Learning', branch:'Robot Learning', color:'#ef4444', icon:'target', tier:'path', mastery:true,
+    a:347.14, r:620, xp:100, diff:'Legendary', credits:4,
+    prereq:['rl_diff'],
+    topics:'Deep RL, Policy Gradients, PPO, SAC, sim-to-real',
+    title:'Robot Learning Engineer',
+    resources:[{name:'Berkeley CS285 — Deep Reinforcement Learning',url:'https://rail.eecs.berkeley.edu/deeprlcourse/'},{name:'NVIDIA Isaac Lab — Docs',url:'https://isaac-sim.github.io/IsaacLab/'}],
+    desc:'Learn from reward in massively-parallel simulation, then deploy to real hardware.' },
+
+  /* --- Path 6: Foundation Models / VLA (Radiant Gold) --- */
+  { id:'vla_trans', name:'Transformers & Large Models', branch:'Foundation Models / VLA', color:'#f5c542', icon:'layers', tier:'path',
+    a:295.71, r:380, xp:60, diff:'Hard', credits:3,
+    prereq:['rl_rl'],
+    topics:'Attention mechanisms, sequence modeling, scaling laws',
+    resources:[{name:'Hugging Face — Learn (NLP / Transformers)',url:'https://huggingface.co/learn'},{name:'Stanford CS25 — Transformers United',url:'https://web.stanford.edu/class/cs25/'}],
+    desc:'Requires Robot Learning Path Mastery. Attention is all you need — including for robots.' },
+  { id:'vla_sys', name:'VLA Systems', branch:'Foundation Models / VLA', color:'#f5c542', icon:'brain-circuit', tier:'path', mastery:true, boss:true,
+    a:295.71, r:520, xp:300, diff:'Legendary', credits:5,
+    prereq:['vla_trans'],
+    topics:'LeRobot, OpenVLA, SmolVLA, Pi0, NVIDIA GR00T',
+    boss:'BOSS #3 — Natural Language Robot Control ("Pick up the red cube") (+100 XP)',
+    title:'Physical AI Engineer (+200 XP)',
+    resources:[{name:'OpenVLA — Research Project',url:'https://openvla.github.io'},{name:'Hugging Face LeRobot — Docs',url:'https://huggingface.co/docs/lerobot'}],
+    desc:'Requires Transformers mastery. Vision-Language-Action models: speak to the robot, watch it act. (Boss +100 & Title +200.)' },
+
+  /* --- Path 7: Research Operations (Stark White) — unlocked from start --- */
+  { id:'res_lit', name:'Literature Mastery', branch:'Research Operations', color:'#e5e7eb', icon:'book-open', tier:'path',
+    a:244.29, r:320, xp:0, diff:'Grind', credits:0, prereq:[],
+    counter:'papersRead', goal:100, xpPer:1,
+    topics:'Paper Reading Log — Goal: 100 papers (+1 XP each)',
+    desc:'Unlocked from start. Read broadly and deeply. Tracked live in the Research Archive.' },
+  { id:'res_repro', name:'Reproduction Engine', branch:'Research Operations', color:'#e5e7eb', icon:'flask-conical', tier:'path',
+    a:244.29, r:450, xp:0, diff:'Hard', credits:0, prereq:[],
+    counter:'papersReproduced', goal:10, xpPer:20,
+    topics:'Paper Reproduction Log — Goal: 10 major papers (+20 XP each)',
+    desc:'Reproduce results from scratch. The fastest way to truly understand a method.' },
+  { id:'res_oss', name:'Open Source Contributor', branch:'Research Operations', color:'#e5e7eb', icon:'git-pull-request', tier:'path',
+    a:244.29, r:580, xp:0, diff:'Hard', credits:0, prereq:[],
+    counter:'openSourcePRs', goal:50, xpPer:2,
+    topics:'Pull requests to ROS2 / LeRobot — Goal: 50 contributions (+100 XP milestone)',
+    desc:'Ship code the whole community uses. PRs to ROS2 and LeRobot count.' },
+  { id:'res_pub', name:'Publications Track', branch:'Research Operations', color:'#e5e7eb', icon:'scroll-text', tier:'path', mastery:true,
+    a:244.29, r:710, xp:0, diff:'Legendary', credits:0, prereq:[],
+    counter:'published', goal:1, xpPer:500,
+    title:'Research Scientist',
+    topics:'Target venues: ICRA, RSS, CoRL (+500 XP per publication)',
+    desc:'The capstone of Research Ops. One accepted paper at a top venue unlocks Research Scientist.' },
+];
+
+const CAPSTONES = ['rob_kin','ros_core','perc_cv','slam_se','rl_rl','vla_sys','res_pub'];
+const NODE_MAP = Object.fromEntries(NODES.map(n => [n.id, n]));
+function getNode(id){ return NODE_MAP[id]; }
+
+/* Clean, even-spaced radial layout — overrides inline a/r for a tidy, uncrowded star */
+(function layoutTree(){
+  const FOUND = ['math_la','math_calc','math_prob','math_opt','cs_python','cs_linux','cs_dsa','cs_swe','phys_mech','phys_elec','phys_signals'];
+  const FR = 330, step = 360 / FOUND.length;
+  FOUND.forEach((id,i)=>{ const n = getNode(id); if (n){ n.a = 90 - i*step; n.r = FR; } });
+  const PATHS = [
+    { a:90,     chain:['rob_kin'] },
+    { a:38.57,  chain:['ros_core'] },
+    { a:141.43, chain:['perc_cv'] },
+    { a:192.86, chain:['slam_se'] },
+    { a:347.14, chain:['rl_il','rl_diff','rl_rl'] },
+    { a:295.71, chain:['vla_trans','vla_sys'] },
+    { a:244.29, chain:['res_lit','res_repro','res_oss','res_pub'] },
+  ];
+  const BASE = 580, GAP = 178;
+  PATHS.forEach(p => p.chain.forEach((id,i)=>{ const n = getNode(id); if (n){ n.a = p.a; n.r = BASE + i*GAP; } }));
+})();
+
+/* =====================================================================
+   3. TARGETS  (grad schools + industry)
+   ===================================================================== */
+const TARGETS = [
+  { id:'cmu', name:'CMU Robotics Institute', cat:'Graduate', icon:'graduation-cap',
+    req:[{t:'Publications', n:1, k:'published'},{t:'Papers Read', n:50, k:'papersRead'},{t:'Master Perception', node:'perc_cv'},{t:'Master Robot Learning', node:'rl_rl'}],
+    note:'The largest robotics program on Earth. Research output is everything.' },
+  { id:'upenn', name:'UPenn GRASP Lab', cat:'Graduate', icon:'graduation-cap',
+    req:[{t:'Publications', n:1, k:'published'},{t:'Papers Read', n:40, k:'papersRead'},{t:'Master SLAM', node:'slam_se'},{t:'Master Robotics Fundamentals', node:'rob_kin'}],
+    note:'GRASP = General Robotics, Automation, Sensing & Perception. Strong on aerial + control.' },
+  { id:'umich', name:'Michigan Robotics', cat:'Graduate', icon:'graduation-cap',
+    req:[{t:'Papers Read', n:35, k:'papersRead'},{t:'Reproductions', n:3, k:'papersReproduced'},{t:'Master ROS Ecosystem', node:'ros_core'}],
+    note:'First standalone Robotics department in the US. Systems-focused.' },
+  { id:'stanford', name:'Stanford AI Lab', cat:'Graduate', icon:'graduation-cap',
+    req:[{t:'Publications', n:2, k:'published'},{t:'Papers Read', n:60, k:'papersRead'},{t:'Master VLA Systems', node:'vla_sys'}],
+    note:'SAIL + IRIS. The epicenter of foundation models for robotics.' },
+  { id:'berkeley', name:'UC Berkeley (BAIR)', cat:'Graduate', icon:'graduation-cap',
+    req:[{t:'Publications', n:2, k:'published'},{t:'Reproductions', n:5, k:'papersReproduced'},{t:'Master Robot Learning', node:'rl_rl'}],
+    note:'BAIR / RAIL. Deep RL for robotics was largely invented here.' },
+  { id:'nvidia', name:'NVIDIA Robotics', cat:'Industry', icon:'cpu',
+    req:[{t:'Master Robot Learning', node:'rl_rl'},{t:'Open Source PRs', n:20, k:'openSourcePRs'},{t:'Master VLA Systems', node:'vla_sys'}],
+    note:'Isaac Lab, GR00T, Jetson. Sim-to-real at planetary scale.' },
+  { id:'figure', name:'Figure AI', cat:'Industry', icon:'bot',
+    req:[{t:'Master VLA Systems', node:'vla_sys'},{t:'Master Robot Learning', node:'rl_rl'},{t:'Reproductions', n:4, k:'papersReproduced'}],
+    note:'Humanoids + end-to-end neural control. Move fast, ship hardware.' },
+  { id:'bostondynamics', name:'Boston Dynamics', cat:'Industry', icon:'dog',
+    req:[{t:'Master Robotics Fundamentals', node:'rob_kin'},{t:'Master SLAM', node:'slam_se'},{t:'Open Source PRs', n:15, k:'openSourcePRs'}],
+    note:'The gold standard of dynamic locomotion and control.' },
+];
+
+/* =====================================================================
+   4. DAILY MISSION POOLS  +  TIMELINE
+   ===================================================================== */
+const MISSION_POOLS = {
+  math:   { icon:'sigma', emoji:'📐', label:'Math Mission', color:'#3b82f6', pool:[
+    'Read 10 pages of Modern Robotics',
+    'Review Linear Algebra: eigenvalues, eigenvectors & SVD',
+    'Work through 5 Khan Academy calculus problems',
+    'Derive the Jacobian of a 2-link arm by hand',
+    'Watch one 3Blue1Brown linear-algebra chapter',
+    'Solve a least-squares fit and verify the normal equations' ] },
+  robotics:{ icon:'bot', emoji:'🤖', label:'Robotics Mission', color:'#a855f7', pool:[
+    'Calibrate the motors on your SO101 arm',
+    'Run a ROS2 publisher / subscriber tutorial',
+    'Solve inverse kinematics for a 3-DOF arm',
+    'Tune a PID controller in simulation',
+    'Print or assemble one 3D robot component',
+    'Visualize a TF tree in RViz' ] },
+  ai:     { icon:'brain', emoji:'🧠', label:'AI Mission', color:'#ef4444', pool:[
+    'Train an ACT policy for 30 minutes',
+    'Tweak Diffusion Policy hyper-parameters',
+    'Run a PPO training loop in Isaac Lab',
+    'Fine-tune SmolVLA on a demo dataset',
+    'Profile a transformer attention block',
+    'Collect 20 teleop demonstrations' ] },
+  research:{ icon:'microscope', emoji:'🔬', label:'Research Mission', color:'#e5e7eb', pool:[
+    'Read 1 deep-learning or robotics paper',
+    'Summarize a paper method in 5 bullet points',
+    'Reproduce one figure from a recent paper',
+    'Skim today’s arXiv cs.RO submissions',
+    'Write structured notes on a CoRL / RSS paper',
+    'Add one paper to your reproduction backlog' ] },
+};
+const MISSION_ORDER = ['math','robotics','ai','research'];
+
+const TIMELINE = [
+  { year:'2026', title:'The Foundation & LeRobot Arc', color:'#3b82f6', icon:'sprout',
+    points:['Lock in Mathematics, Physics & CS foundations','Set up SO101 / Stanford Pupper hardware','Install the LeRobot framework','Compile & print 3D components','Train your first ACT policies'] },
+  { year:'2027', title:'The Autonomy Arc', color:'#06b6d4', icon:'route',
+    points:['Master the ROS2 ecosystem','Build MoveIt2 manipulation workspaces','Integrate Computer Vision pipelines','Stand up Visual SLAM mapping branches'] },
+  { year:'2028', title:'The Intelligence & Scale Arc', color:'#ef4444', icon:'cpu',
+    points:['Deep RL loops via Isaac Lab','Optimize OpenVLA architectures','Draft your first major paper','Submit to Tier-1 conferences (ICRA / RSS / CoRL)'] },
+  { year:'2029', title:'The Zenith Arc', color:'#ffd700', icon:'crown',
+    points:['Dispatch elite grad applications (CMU, Stanford, UPenn, Michigan)','Finalize publications & portfolio','Transition to the legendary class','Become a Physical AI Architect'] },
+];
+
+/* =====================================================================
+   5. STATE + PERSISTENCE
+   ===================================================================== */
+const SAVE_KEY = 'steve_physical_ai_rpg_v1';
+function defaultState(){
+  return {
+    level: 18,
+    xp: 0,
+    totalXp: 0,
+    streak: 0,
+    lastStreakDate: null,
+    streakFreezes: 0,
+    streakFreezeOn: true,
+    computeCredits: 0,
+    completed: {},          // nodeId -> true
+    research: { papersRead:0, papersReproduced:0, openSourcePRs:0, published:0, researchSeconds:0 },
+    daily: { date:null, missions:[], done:[false,false,false,false], bonusClaimed:false },
+    xpHistory: {},          // 'YYYY-MM-DD' -> xp earned that day
+    paperLog: [],           // {title, venue, date, link, status}
+    targetsSeen: {},
+    github: { pat:'', repo:'', path:'progress.json', branch:'main' },
+    createdAt: new Date().toISOString(),
+  };
+}
+let S = loadState();
+
+function loadState(){
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const d = defaultState();
+      const merged = Object.assign(d, parsed);
+      merged.research = Object.assign(d.research, parsed.research || {});
+      merged.daily = Object.assign(d.daily, parsed.daily || {});
+      merged.github = Object.assign(d.github, parsed.github || {});
+      return merged;
+    }
+  } catch (e) { console.warn('load failed', e); }
+  return defaultState();
+}
+function save(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){ console.warn('save failed', e); } }
+
+/* =====================================================================
+   6. DATE + SEEDED RNG HELPERS
+   ===================================================================== */
+function pad2(n){ return String(n).padStart(2,'0'); }
+function dateStr(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+function todayStr(){ return dateStr(new Date()); }
+function addDays(str, n){ const d = new Date(str+'T00:00:00'); d.setDate(d.getDate()+n); return dateStr(d); }
+function dayDiff(a, b){ // whole days from a -> b
+  const da = new Date(a+'T00:00:00'), db = new Date(b+'T00:00:00');
+  return Math.round((db - da) / 86400000);
+}
+function hashStr(str){ let h = 2166136261 >>> 0; for (let i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+function mulberry32(seed){ return function(){ seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+/* =====================================================================
+   7. LEVELING MATH  +  XP / CREDITS
+   ===================================================================== */
+function xpReq(L){ return Math.floor(100 * Math.pow(L, 1.5)); }
+function classForLevel(){ return architectUnlocked() ? 'Physical AI Architect' : 'Robotics Builder'; }
+function architectUnlocked(){ return CAPSTONES.every(id => isCompleted(getNode(id))); }
+
+let _pendingLevelups = [];
+function awardXP(amount, originEl){
+  if (amount <= 0) return;
+  S.xp += amount;
+  S.totalXp += amount;
+  const t = todayStr();
+  S.xpHistory[t] = (S.xpHistory[t] || 0) + amount;
+  // level loop
+  let leveled = false;
+  while (S.xp >= xpReq(S.level)) {
+    S.xp -= xpReq(S.level);
+    S.level += 1;
+    leveled = true;
+    _pendingLevelups.push(S.level);
+  }
+  spawnXPParticles(amount, originEl);
+  save();
+  renderBanner();
+  if (leveled) flushLevelups();
+}
+function awardCredits(n){ if(n>0){ S.computeCredits += n; save(); renderBanner(); } }
+
+/* =====================================================================
+   8. NODE STATE LOGIC  (dependency engine)
+   ===================================================================== */
+function isCompleted(n){
+  if (!n) return false;
+  if (n.counter) return (S.research[n.counter] || 0) >= n.goal;
+  return !!S.completed[n.id];
+}
+function prereqsMet(n){ return (n.prereq || []).every(id => isCompleted(getNode(id))); }
+function missingPrereqs(n){ return (n.prereq || []).filter(id => !isCompleted(getNode(id))).map(id => getNode(id)); }
+function nodeState(n){
+  if (n.id === 'hub') return architectUnlocked() ? 'mastered' : 'unlocked';
+  if (isCompleted(n)) return n.mastery ? 'mastered' : 'completed';
+  return prereqsMet(n) ? 'unlocked' : 'locked';
+}
+
+function completeNode(n, originEl){
+  if (n.counter) { switchView('research'); return; }       // counter nodes are driven by Research view
+  if (isCompleted(n)) return;
+  if (!prereqsMet(n)) return;
+  const wasArchitect = architectUnlocked();
+  S.completed[n.id] = true;
+  awardCredits(n.credits || 0);
+  awardXP(n.xp || 0, originEl);
+  save();
+  renderAll();
+  if (!wasArchitect && architectUnlocked()) triggerArchitect();
+}
+function uncompleteNode(n){
+  if (n.counter) return;
+  if (!S.completed[n.id]) return;
+  delete S.completed[n.id];
+  // refund (keep it simple: subtract from totals, clamp)
+  S.totalXp = Math.max(0, S.totalXp - (n.xp||0));
+  save();
+  renderAll();
+}
+
+/* =====================================================================
+   9. SMALL UTILITIES
+   ===================================================================== */
+function byId(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function icons(){ if (window.lucide) lucide.createIcons(); }
+let _toastT;
+function toast(msg){
+  let t = byId('toast');
+  if (!t){ t = document.createElement('div'); t.id='toast'; t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-[120] glass-strong px-4 py-2 rounded-xl text-sm font-semibold border border-cyan-400/40'; document.body.appendChild(t); }
+  t.textContent = msg; t.style.opacity = '1';
+  clearTimeout(_toastT); _toastT = setTimeout(()=>{ t.style.opacity='0'; }, 2200);
+}
+
+/* =====================================================================
+   10. DAILY MISSIONS + STREAK
+   ===================================================================== */
+function ensureDaily(){
+  const t = todayStr();
+  if (S.daily.date !== t){
+    const rng = mulberry32(hashStr('phys-ai-mission-'+t));
+    const missions = MISSION_ORDER.map(key=>{
+      const p = MISSION_POOLS[key];
+      const idx = Math.floor(rng() * p.pool.length);
+      return { key, text: p.pool[idx] };
+    });
+    S.daily = { date:t, missions, done:[false,false,false,false], bonusClaimed:false };
+    save();
+  }
+}
+function toggleMission(i, el){
+  ensureDaily();
+  S.daily.done[i] = !S.daily.done[i];
+  if (S.daily.done[i]){
+    awardXP(10, el);
+    registerStreak();
+  } else {
+    S.totalXp = Math.max(0, S.totalXp - 10);
+  }
+  if (S.daily.done.every(Boolean) && !S.daily.bonusClaimed){
+    S.daily.bonusClaimed = true;
+    awardCredits(1);
+    awardXP(25, el);
+    toast('All daily missions complete! +25 XP bonus');
+  }
+  if (!S.daily.done.every(Boolean)) S.daily.bonusClaimed = false;
+  save();
+  renderDashboard(); renderBanner(); icons();
+}
+function registerStreak(){
+  const t = todayStr();
+  if (S.lastStreakDate === t) return;
+  if (S.lastStreakDate && dayDiff(S.lastStreakDate, t) === 1) S.streak += 1;
+  else S.streak = 1;
+  S.lastStreakDate = t;
+  save();
+}
+function checkStreakIntegrity(){
+  if (!S.lastStreakDate) return;
+  const t = todayStr();
+  const gap = dayDiff(S.lastStreakDate, t);
+  if (gap <= 1) return;
+  const missed = gap - 1;
+  if (S.streakFreezeOn && S.streakFreezes >= missed && S.streak > 0){
+    S.streakFreezes -= missed;
+    S.lastStreakDate = addDays(t, -1);
+    toast('Streak Freeze used — chain preserved');
+  } else {
+    S.streak = 0; S.lastStreakDate = null;
+  }
+  save();
+}
+const FREEZE_COST = 3;
+function buyStreakFreeze(){
+  if (S.computeCredits < FREEZE_COST){ toast('Need '+FREEZE_COST+' Compute Credits'); return; }
+  S.computeCredits -= FREEZE_COST; S.streakFreezes += 1;
+  save(); renderBanner(); renderDashboard(); icons();
+}
+function toggleFreezeUse(){ S.streakFreezeOn = !S.streakFreezeOn; save(); renderDashboard(); icons(); }
+
+/* =====================================================================
+   11. GLOBAL RENDER + BANNER
+   ===================================================================== */
+function renderAll(){
+  renderBanner(); renderDashboard(); renderMatrix(); renderResearch(); renderTimeline(); icons();
+}
+function renderBanner(){
+  const req = xpReq(S.level);
+  byId('banner-level').textContent = S.level;
+  byId('banner-class').textContent = '// ' + classForLevel();
+  byId('banner-class').classList.toggle('neon-gold', architectUnlocked());
+  byId('banner-xp').textContent = Math.floor(S.xp).toLocaleString();
+  byId('banner-xpreq').textContent = req.toLocaleString();
+  byId('banner-xpfill').style.width = Math.min(100, (S.xp / req) * 100) + '%';
+  byId('banner-streak').textContent = S.streak;
+  byId('banner-credits').textContent = S.computeCredits;
+}
+
+/* =====================================================================
+   12. COMMAND CENTER (DASHBOARD)
+   ===================================================================== */
+function heatLevel(xp){ if (xp<=0) return 0; if (xp<20) return 1; if (xp<50) return 2; if (xp<120) return 3; return 4; }
+function heatmapHTML(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const weeks = 53, totalDays = weeks*7;
+  let start = new Date(today);
+  start.setDate(start.getDate() - (totalDays - 1));
+  start.setDate(start.getDate() - start.getDay()); // back to Sunday
+  let cols = '';
+  const cur = new Date(start);
+  for (let w=0; w<weeks; w++){
+    let cells = '';
+    for (let d=0; d<7; d++){
+      const ds = dateStr(cur);
+      const future = cur > today;
+      const xp = S.xpHistory[ds] || 0;
+      const lvl = heatLevel(xp);
+      cells += `<div class="hm-cell ${future?'opacity-0':'hm-'+lvl}" title="${ds} • ${xp} XP"></div>`;
+      cur.setDate(cur.getDate()+1);
+    }
+    cols += `<div class="flex flex-col gap-[3px]">${cells}</div>`;
+  }
+  return cols;
+}
+function reqMet(r){ return r.node ? isCompleted(getNode(r.node)) : (S.research[r.k]||0) >= r.n; }
+function targetProgress(tg){ const met = tg.req.filter(reqMet).length; return { met, total: tg.req.length }; }
+
+function renderDashboard(){
+  ensureDaily();
+  const arch = architectUnlocked();
+  const capDone = CAPSTONES.filter(id=>isCompleted(getNode(id))).length;
+  const nextQuest = CAPSTONES.map(getNode).find(n=>!isCompleted(n));
+  const reqXP = xpReq(S.level);
+
+  // ---- target tiles ----
+  const targetTiles = TARGETS.map(tg=>{
+    const p = targetProgress(tg);
+    const pct = Math.round(p.met/p.total*100);
+    const done = p.met===p.total;
+    return `<button onclick="openTarget('${tg.id}')" class="target-tile glass rounded-xl p-3 text-left ${done?'border-amber-400/50':''}">
+      <div class="flex items-center gap-2 mb-1.5">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center ${tg.cat==='Graduate'?'bg-cyan-500/10 text-cyan-300':'bg-purple-500/10 text-purple-300'}">
+          <i data-lucide="${tg.icon}" style="width:17px;height:17px"></i>
+        </div>
+        <div class="min-w-0">
+          <div class="text-xs font-bold leading-tight truncate">${esc(tg.name)}</div>
+          <div class="text-[10px] uppercase tracking-wider text-slate-300">${tg.cat}</div>
+        </div>
+        ${done?'<i data-lucide="badge-check" class="ml-auto text-amber-400" style="width:18px;height:18px"></i>':''}
+      </div>
+      <div class="progress-mini"><div style="width:${pct}%;background:${done?'#ffd700':'#06b6d4'}"></div></div>
+      <div class="text-[10px] text-slate-300 mt-1">${p.met}/${p.total} requirements</div>
+    </button>`;
+  }).join('');
+
+  // ---- daily missions ----
+  const missionRows = S.daily.missions.map((m,i)=>{
+    const pool = MISSION_POOLS[m.key];
+    const done = S.daily.done[i];
+    return `<label class="flex items-start gap-3 p-2.5 rounded-lg cursor-pointer hover:bg-white/5 transition ${done?'opacity-70':''}">
+      <input type="checkbox" ${done?'checked':''} onchange="toggleMission(${i}, this)" class="mt-0.5 w-4 h-4 accent-green-400 shrink-0">
+      <span class="text-base leading-none mt-0.5">${pool.emoji}</span>
+      <span class="min-w-0">
+        <span class="block text-[11px] uppercase tracking-wider font-bold" style="color:${pool.color}">${pool.label}</span>
+        <span class="block text-sm ${done?'line-through text-slate-300':''}">${esc(m.text)}</span>
+      </span>
+      <span class="ml-auto mono text-[11px] ${done?'neon-xp':'text-slate-300'} shrink-0">+10</span>
+    </label>`;
+  }).join('');
+  const allDone = S.daily.done.every(Boolean);
+
+  byId('view-dashboard').innerHTML = `
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
+
+    <!-- Character profile -->
+    <div class="glass rounded-2xl p-5 lg:col-span-1 flex flex-col">
+      <div class="flex items-center gap-4">
+        <div class="relative">
+          <div class="w-20 h-20 rounded-2xl flex items-center justify-center text-3xl border-2 ${arch?'border-amber-400':'border-cyan-400/60'}"
+               style="background:radial-gradient(circle at 30% 30%, ${arch?'rgba(255,215,0,0.25)':'rgba(6,182,212,0.18)'}, rgba(10,10,14,0.9));${arch?'box-shadow:0 0 22px rgba(255,215,0,0.5);animation:orbPulse 2s infinite':''}">
+            <i data-lucide="${arch?'crown':'bot'}" style="width:34px;height:34px;color:${arch?'#ffd700':'#7de9f7'}"></i>
+          </div>
+        </div>
+        <div class="min-w-0">
+          <div class="font-display text-lg font-bold leading-tight">Steve Ji</div>
+          <div class="text-sm ${arch?'neon-gold':'text-purple-300'} font-semibold">${classForLevel()}</div>
+          <div class="text-xs text-slate-300 mt-0.5">Level ${S.level} • ${S.totalXp.toLocaleString()} total XP</div>
+        </div>
+      </div>
+      <div class="mt-4">
+        <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Progress to LVL ${S.level+1}</span><span class="mono text-slate-400">${Math.floor(S.xp).toLocaleString()}/${reqXP.toLocaleString()}</span></div>
+        <div class="xp-track h-2 rounded-full"><div class="xp-fill h-full rounded-full" style="width:${Math.min(100,S.xp/reqXP*100)}%"></div></div>
+      </div>
+      <div class="grid grid-cols-3 gap-2 mt-4 text-center">
+        <div class="glass rounded-lg py-2"><div class="font-display text-lg neon-xp">${Object.values(S.completed).filter(Boolean).length}</div><div class="text-[10px] uppercase tracking-wider text-slate-300">Nodes</div></div>
+        <div class="glass rounded-lg py-2"><div class="font-display text-lg text-orange-300">${S.streak}</div><div class="text-[10px] uppercase tracking-wider text-slate-300">Streak</div></div>
+        <div class="glass rounded-lg py-2"><div class="font-display text-lg text-cyan-200">${S.computeCredits}</div><div class="text-[10px] uppercase tracking-wider text-slate-300">Credits</div></div>
+      </div>
+      <!-- Main quest -->
+      <div class="mt-4 p-3 rounded-xl border border-amber-400/25 bg-amber-400/5">
+        <div class="text-[10px] uppercase tracking-[0.2em] text-amber-300/80 mb-1 flex items-center gap-1.5"><i data-lucide="swords" style="width:13px;height:13px"></i> Main Quest</div>
+        ${arch
+          ? `<div class="text-sm font-bold neon-gold">★ Physical AI Architect achieved ★</div>`
+          : `<div class="text-sm font-semibold">${esc(nextQuest? nextQuest.name : 'Begin your journey')}</div>
+             <div class="text-xs text-slate-400 mt-0.5">${esc(nextQuest? nextQuest.branch : '')} — ${capDone}/7 star points mastered</div>
+             <div class="progress-mini mt-2"><div style="width:${capDone/7*100}%;background:#ffd700"></div></div>`}
+      </div>
+    </div>
+
+    <!-- Daily missions -->
+    <div class="glass rounded-2xl p-5 lg:col-span-2 flex flex-col">
+      <div class="flex items-center justify-between mb-1">
+        <h3 class="font-display text-base font-bold flex items-center gap-2"><i data-lucide="calendar-check" class="text-green-400" style="width:18px;height:18px"></i> Daily Missions</h3>
+        <span class="mono text-xs text-slate-300">${todayStr()}</span>
+      </div>
+      <p class="text-xs text-slate-300 mb-2">Complete one to keep your streak. Finish all four for a <span class="neon-xp">+25 XP</span> bonus & a Compute Credit.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-1">${missionRows}</div>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <div class="flex-1 min-w-[160px]">
+          <div class="progress-mini"><div style="width:${S.daily.done.filter(Boolean).length/4*100}%;background:${allDone?'#4ade80':'#06b6d4'}"></div></div>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/30 text-xs" title="Streak Freezes owned">
+            <i data-lucide="snowflake" class="text-sky-300" style="width:15px;height:15px"></i>
+            <span class="font-bold text-sky-200">${S.streakFreezes}</span>
+          </div>
+          <button onclick="buyStreakFreeze()" class="btn !py-1.5 !px-2.5 text-xs" title="Cost: ${FREEZE_COST} Compute Credits"><i data-lucide="shopping-cart" style="width:14px;height:14px"></i> Buy Freeze</button>
+          <button onclick="toggleFreezeUse()" class="btn !py-1.5 !px-2.5 text-xs ${S.streakFreezeOn?'btn-green':''}" title="Auto-use a freeze to protect your streak">
+            <i data-lucide="${S.streakFreezeOn?'shield-check':'shield-off'}" style="width:14px;height:14px"></i> Auto-protect
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Target radars -->
+  <div class="glass rounded-2xl p-5 mt-4 sm:mt-5">
+    <h3 class="font-display text-base font-bold flex items-center gap-2 mb-1"><i data-lucide="radar" class="text-cyan-400" style="width:18px;height:18px"></i> Target Radars</h3>
+    <p class="text-xs text-slate-300 mb-3">Top-tier destinations. Click any target to reveal its entry requirements and your live progress.</p>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">${targetTiles}</div>
+  </div>
+
+  <!-- Contribution matrix -->
+  <div class="glass rounded-2xl p-5 mt-4 sm:mt-5">
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <h3 class="font-display text-base font-bold flex items-center gap-2"><i data-lucide="grid-2x2" class="text-green-400" style="width:18px;height:18px"></i> Contribution Matrix</h3>
+      <div class="flex items-center gap-1.5 text-[11px] text-slate-300">Less
+        <span class="hm-cell hm-0"></span><span class="hm-cell hm-1"></span><span class="hm-cell hm-2"></span><span class="hm-cell hm-3"></span><span class="hm-cell hm-4"></span>
+        More</div>
+    </div>
+    <div class="overflow-x-auto pb-1"><div class="flex gap-[3px] min-w-max">${heatmapHTML()}</div></div>
+    <div class="text-xs text-slate-300 mt-2">${(S.xpHistory[todayStr()]||0)} XP earned today • ${Object.keys(S.xpHistory).length} active days logged</div>
+  </div>`;
+  icons();
+}
+
+/* =====================================================================
+   13. THE MATRIX  —  radial star skill tree
+   ===================================================================== */
+const TREE_LINKS = [
+  // foundation spokes
+  ['hub','math_la'],['hub','math_calc'],['hub','math_prob'],['hub','math_opt'],
+  ['hub','phys_mech'],['hub','phys_elec'],['hub','phys_signals'],
+  ['hub','cs_python'],['hub','cs_linux'],['hub','cs_dsa'],['hub','cs_swe'],
+  // path bases out of hub
+  ['hub','rob_kin'],['hub','ros_core'],['hub','perc_cv'],['hub','slam_se'],
+  ['hub','rl_il'],['hub','vla_trans'],['hub','res_lit'],
+  // sequential chains
+  ['rl_il','rl_diff'],['rl_diff','rl_rl'],
+  ['vla_trans','vla_sys'],
+  ['res_lit','res_repro'],['res_repro','res_oss'],['res_oss','res_pub'],
+];
+const OUTER_RIM = 1160;
+let treeView = { scale:0.46, x:0, y:0, init:false };
+
+function nodeXY(n){ const p = pol(n.a, n.r); return p; }
+
+function renderMatrix(){
+  const arch = architectUnlocked();
+  // lines — thin & neutral; only completed paths pick up a quiet tint
+  let lines = '';
+  TREE_LINKS.forEach(([f,t])=>{
+    const A = nodeXY(getNode(f)), B = nodeXY(getNode(t));
+    const child = getNode(t);
+    const st = nodeState(child);
+    let col = '#34343e';          // default neutral
+    if (st==='mastered') col = '#5c4a14';
+    else if (st==='completed') col = child.color;
+    else if (st==='unlocked') col = '#42424e';
+    const op = st==='locked' ? 0.35 : (st==='completed'||st==='mastered' ? 0.55 : 0.5);
+    lines += `<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" class="tree-line" stroke="${col}" style="opacity:${op}"/>`;
+  });
+
+  // nodes
+  let nodesHTML = '';
+  NODES.forEach(n=>{
+    const p = nodeXY(n);
+    const st = nodeState(n);
+    const glow = st==='mastered' ? 'rgba(255,215,0,0.7)' : hexGlow(n.color);
+    let badge = '';
+    if (st==='locked') badge = `<span class="badge" style="color:#8b90a0"><i data-lucide="lock"></i></span>`;
+    else if (st==='mastered') badge = `<span class="badge" style="color:#ffd700"><i data-lucide="star"></i></span>`;
+    else if (st==='completed') badge = `<span class="badge" style="color:${n.color}"><i data-lucide="check"></i></span>`;
+    let sub = n.xp>0 ? `+${n.xp} XP` : '';
+    if (n.counter){ const v=S.research[n.counter]||0; sub = `${v}/${n.goal}`; }
+    if (n.id==='hub') sub = arch ? 'ARCHITECT' : 'START';
+    const title = st==='locked' ? `Locked — needs: ${missingPrereqs(n).map(p=>p.name).join(', ')}` : (n.name+(n.title?(' → '+n.title.replace(/\s*\(\+[^)]*\)/,'')):''));
+    const cls = `sk-node ${n.id==='hub'?'hub-node':''} state-${st}`;
+    const dispName = (n.id==='hub') ? (arch?'Physical AI Architect':'Robotics Builder') : n.name;
+    const nameColor = (n.id==='hub'&&arch) ? '#ffd700' : '';
+    nodesHTML += `<div class="${cls}" style="left:${p.x}px;top:${p.y}px;--node-c:${n.id==='hub'&&arch?'#ffd700':n.color};--node-glow:${glow}"
+        title="${esc(title)}" onclick="openNode('${n.id}')">
+      <div class="orb">${badge}<i data-lucide="${n.icon}"></i></div>
+      <div class="lbl" style="${nameColor?('color:'+nameColor):''}">${esc(dispName)}</div>
+      <div class="xp-tag">${esc(sub)}</div>
+    </div>`;
+  });
+
+  // legend
+  const branches = [['Mathematics','#3b82f6'],['Physics','#f97316'],['Computer Science','#22c55e'],['Robotics Fundamentals','#a855f7'],['ROS Ecosystem','#06b6d4'],['Perception','#ec4899'],['SLAM','#eab308'],['Robot Learning','#ef4444'],['Foundation Models / VLA','#f5c542'],['Research Operations','#e5e7eb']];
+  const legend = branches.map(([n,c])=>`<span class="chip" style="color:${c};border-color:${c}55;background:${c}14">${n}</span>`).join('');
+
+  byId('view-matrix').innerHTML = `
+  <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+    <div>
+      <h2 class="font-display text-lg font-bold flex items-center gap-2"><i data-lucide="git-fork" class="text-cyan-400" style="width:20px;height:20px"></i> The Matrix</h2>
+      <p class="text-xs text-slate-300">Radial star progression — advance every point to converge on <span class="neon-gold">Physical AI Architect</span>. Drag to pan • scroll to zoom.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="zoomTree(1.2)" class="btn !p-2" title="Zoom in"><i data-lucide="zoom-in" style="width:16px;height:16px"></i></button>
+      <button onclick="zoomTree(0.8)" class="btn !p-2" title="Zoom out"><i data-lucide="zoom-out" style="width:16px;height:16px"></i></button>
+      <button onclick="centerTree(true)" class="btn !p-2" title="Reset view"><i data-lucide="locate-fixed" style="width:16px;height:16px"></i></button>
+    </div>
+  </div>
+  <div class="flex flex-wrap gap-1.5 mb-3">${legend}</div>
+  <div id="tree-viewport" class="glass rounded-2xl relative overflow-hidden" style="height:min(74vh,720px)">
+    <div id="tree-canvas" style="position:absolute;width:${CANVAS}px;height:${CANVAS}px;left:0;top:0">
+      <svg id="tree-lines" width="${CANVAS}" height="${CANVAS}" viewBox="0 0 ${CANVAS} ${CANVAS}">
+        <circle cx="${CX}" cy="${CY}" r="${OUTER_RIM}" fill="none" stroke="${arch?'#ffd700':'#3a3a44'}" stroke-width="2" stroke-dasharray="3 10" style="opacity:${arch?0.8:0.3}"/>
+        ${lines}
+      </svg>
+      ${nodesHTML}
+      <div style="position:absolute;left:${CX}px;top:${CY - OUTER_RIM - 34}px;transform:translateX(-50%);text-align:center">
+        <div class="font-display text-sm font-bold tracking-[0.3em] ${arch?'neon-gold':'text-slate-300'}">OUTER RIM</div>
+        <div class="text-[11px] tracking-widest ${arch?'neon-gold':'text-slate-400'}">PHYSICAL AI ARCHITECT</div>
+      </div>
+    </div>
+  </div>`;
+  applyTreeTransform();
+  if (!treeView.init) centerTree(false);
+  icons();
+}
+function hexGlow(hex){ return hex+'aa'; }
+function applyTreeTransform(){ const c = byId('tree-canvas'); if (c) c.style.transform = `translate(${treeView.x}px,${treeView.y}px) scale(${treeView.scale})`; }
+function centerTree(reset){
+  const vp = byId('tree-viewport'); if (!vp) return;
+  const w = vp.clientWidth, h = vp.clientHeight;
+  if (w === 0 || h === 0) return;   // view hidden — defer centering until visible
+  if (reset || !treeView.init){
+    const maxR = 1230;              // content radius incl. node labels
+    treeView.scale = Math.max(0.16, Math.min(1.0, Math.min(w, h) / (2 * maxR) * 0.98));
+  }
+  treeView.x = w/2 - CX*treeView.scale;
+  treeView.y = h/2 - CY*treeView.scale;
+  treeView.init = true;
+  applyTreeTransform();
+}
+function zoomTree(factor){
+  const vp = byId('tree-viewport'); if (!vp) return;
+  const w = vp.clientWidth, h = vp.clientHeight;
+  const cx = w/2, cy = h/2;
+  const ns = Math.max(0.2, Math.min(1.6, treeView.scale*factor));
+  // zoom around viewport center
+  treeView.x = cx - (cx - treeView.x) * (ns/treeView.scale);
+  treeView.y = cy - (cy - treeView.y) * (ns/treeView.scale);
+  treeView.scale = ns;
+  applyTreeTransform();
+}
+
+/* =====================================================================
+   14. RESEARCH ARCHIVE
+   ===================================================================== */
+const RES_XP = { papersRead:1, papersReproduced:20, openSourcePRs:2, published:500 };
+function adjustResearch(key, delta, el){
+  const cur = S.research[key]||0;
+  const next = Math.max(0, cur+delta);
+  if (next===cur) return;
+  const wasArch = architectUnlocked();
+  S.research[key] = next;
+  if (delta>0) awardXP(RES_XP[key]*delta, el);
+  else { S.totalXp = Math.max(0, S.totalXp - RES_XP[key]*Math.abs(delta)); save(); renderBanner(); }
+  save(); renderResearch(); renderDashboard(); renderMatrix(); icons();
+  if (!wasArch && architectUnlocked()) triggerArchitect();
+}
+/* stopwatch */
+let _swRunning=false, _swStart=0, _swTick=null;
+function fmtHMS(sec){ const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=Math.floor(sec%60); return `${pad2(h)}:${pad2(m)}:${pad2(s)}`; }
+function swDisplaySec(){ return S.research.researchSeconds + (_swRunning ? (Date.now()-_swStart)/1000 : 0); }
+function startStopwatch(){ if(_swRunning)return; _swRunning=true; _swStart=Date.now(); _swTick=setInterval(()=>{ const d=byId('sw-display'); if(d)d.textContent=fmtHMS(swDisplaySec()); },1000); renderResearch(); icons(); }
+function pauseStopwatch(){ if(!_swRunning)return; S.research.researchSeconds += (Date.now()-_swStart)/1000; _swRunning=false; clearInterval(_swTick); save(); renderResearch(); renderBanner(); icons(); }
+function resetStopwatch(){ _swRunning=false; clearInterval(_swTick); S.research.researchSeconds=0; save(); renderResearch(); icons(); }
+/* paper log */
+function addPaper(){
+  const title=byId('p-title').value.trim(); if(!title){ toast('Enter a paper title'); return; }
+  const venue=byId('p-venue').value, link=byId('p-link').value.trim(), status=byId('p-status').value;
+  S.paperLog.unshift({ title, venue, link, status, date: todayStr() });
+  save(); renderResearch(); icons(); toast('Paper logged');
+}
+function deletePaper(i){ S.paperLog.splice(i,1); save(); renderResearch(); icons(); }
+function cycleStatus(i){ const order=['Read','Implementing','Reproduced']; const p=S.paperLog[i]; p.status=order[(order.indexOf(p.status)+1)%order.length]; save(); renderResearch(); icons(); }
+
+function counterCard(key,label,goal,icon,color,xpEach){
+  const v=S.research[key]||0; const pct=goal?Math.min(100,v/goal*100):0;
+  return `<div class="glass rounded-xl p-4">
+    <div class="flex items-center gap-2 mb-2">
+      <i data-lucide="${icon}" style="width:18px;height:18px;color:${color}"></i>
+      <span class="text-sm font-bold">${label}</span>
+      <span class="ml-auto mono text-[11px] text-slate-300">+${xpEach} XP each</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <button onclick="adjustResearch('${key}',-1,this)" class="btn !p-0 !w-8 !h-8 justify-center text-lg leading-none">−</button>
+      <div class="text-center min-w-[70px]"><span class="font-display text-2xl" style="color:${color}">${v}</span>${goal?`<span class="text-slate-300 text-sm"> / ${goal}</span>`:''}</div>
+      <button onclick="adjustResearch('${key}',1,this)" class="btn btn-green !p-0 !w-8 !h-8 justify-center text-lg leading-none">+</button>
+      <div class="flex-1 progress-mini ml-1"><div style="width:${pct}%;background:${color}"></div></div>
+    </div>
+  </div>`;
+}
+function renderResearch(){
+  const rows = S.paperLog.map((p,i)=>{
+    const stColor = p.status==='Reproduced'?'#4ade80':p.status==='Implementing'?'#eab308':'#06b6d4';
+    return `<tr class="border-t border-white/5 hover:bg-white/5">
+      <td class="py-2 px-2 text-sm">${esc(p.title)}</td>
+      <td class="py-2 px-2"><span class="chip" style="color:#cbd5e1;border-color:#ffffff22;background:#ffffff0a">${esc(p.venue)}</span></td>
+      <td class="py-2 px-2 mono text-xs text-slate-400">${esc(p.date)}</td>
+      <td class="py-2 px-2 text-xs">${p.link?`<a href="${esc(p.link)}" target="_blank" rel="noopener" class="res-link">link</a>`:'<span class="text-slate-400">—</span>'}</td>
+      <td class="py-2 px-2"><button onclick="cycleStatus(${i})" class="chip" style="color:${stColor};border-color:${stColor}66;background:${stColor}14">${p.status}</button></td>
+      <td class="py-2 px-2 text-right"><button onclick="deletePaper(${i})" class="text-slate-400 hover:text-red-400"><i data-lucide="trash-2" style="width:15px;height:15px"></i></button></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="6" class="py-6 text-center text-slate-400 text-sm">No papers logged yet. Add your first above.</td></tr>`;
+
+  byId('view-research').innerHTML = `
+  <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+    <div>
+      <h2 class="font-display text-lg font-bold flex items-center gap-2"><i data-lucide="microscope" class="text-pink-400" style="width:20px;height:20px"></i> Research Archive</h2>
+      <p class="text-xs text-slate-300">Track literature, reproductions, contributions & publications. Counters award XP live.</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    ${counterCard('papersRead','Papers Read',100,'book-open','#06b6d4',1)}
+    ${counterCard('papersReproduced','Papers Reproduced',10,'flask-conical','#a855f7',20)}
+    ${counterCard('openSourcePRs','Open Source PRs',50,'git-pull-request','#22c55e',2)}
+    ${counterCard('published','Published Papers',0,'scroll-text','#ffd700',500)}
+  </div>
+
+  <!-- Stopwatch -->
+  <div class="glass rounded-2xl p-5 mt-4 flex flex-col sm:flex-row items-center gap-4">
+    <div class="flex items-center gap-3">
+      <i data-lucide="timer" class="text-cyan-400" style="width:22px;height:22px"></i>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-300">Research Hours</div>
+        <div id="sw-display" class="font-display text-3xl ${_swRunning?'neon-xp':''}">${fmtHMS(swDisplaySec())}</div>
+      </div>
+    </div>
+    <div class="flex gap-2 sm:ml-auto">
+      ${_swRunning
+        ? `<button onclick="pauseStopwatch()" class="btn btn-danger"><i data-lucide="pause" style="width:16px;height:16px"></i> Pause</button>`
+        : `<button onclick="startStopwatch()" class="btn btn-green"><i data-lucide="play" style="width:16px;height:16px"></i> Start</button>`}
+      <button onclick="resetStopwatch()" class="btn"><i data-lucide="rotate-ccw" style="width:16px;height:16px"></i> Reset</button>
+    </div>
+  </div>
+
+  <!-- Paper log -->
+  <div class="glass rounded-2xl p-5 mt-4">
+    <h3 class="font-display text-base font-bold flex items-center gap-2 mb-3"><i data-lucide="library" class="text-cyan-400" style="width:18px;height:18px"></i> Paper Log</h3>
+    <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-4">
+      <input id="p-title" placeholder="Paper title" class="sm:col-span-4 text-sm">
+      <select id="p-venue" class="sm:col-span-2 text-sm"><option>arXiv</option><option>ICRA</option><option>RSS</option><option>CoRL</option><option>CVPR</option><option>NeurIPS</option><option>Other</option></select>
+      <input id="p-link" placeholder="Implementation / paper link" class="sm:col-span-3 text-sm">
+      <select id="p-status" class="sm:col-span-2 text-sm"><option>Read</option><option>Implementing</option><option>Reproduced</option></select>
+      <button onclick="addPaper()" class="btn btn-primary sm:col-span-1 justify-center"><i data-lucide="plus" style="width:16px;height:16px"></i></button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="text-left">
+        <thead><tr class="text-[11px] uppercase tracking-wider text-slate-300">
+          <th class="py-2 px-2">Title</th><th class="py-2 px-2">Venue</th><th class="py-2 px-2">Date</th><th class="py-2 px-2">Link</th><th class="py-2 px-2">Status</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+  icons();
+}
+
+/* =====================================================================
+   15. TIMELINE
+   ===================================================================== */
+function renderTimeline(){
+  const curYear = String(new Date().getFullYear());
+  const cards = TIMELINE.map((arc,i)=>{
+    const isNow = arc.year===curYear;
+    const pts = arc.points.map(p=>`<li class="flex items-start gap-2 text-sm text-slate-300"><i data-lucide="chevron-right" style="width:14px;height:14px;color:${arc.color};margin-top:3px;flex:none"></i><span>${esc(p)}</span></li>`).join('');
+    return `<div class="shrink-0 w-[280px] sm:w-[320px]">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="tl-node-dot w-4 h-4 rounded-full" style="background:${arc.color};box-shadow:0 0 12px ${arc.color}"></div>
+        <div class="h-px flex-1" style="background:linear-gradient(90deg,${arc.color}88,transparent)"></div>
+        ${isNow?`<span class="chip" style="color:${arc.color};border-color:${arc.color}66;background:${arc.color}1a">YOU ARE HERE</span>`:''}
+      </div>
+      <div class="glass rounded-2xl p-5 h-full ${isNow?'ring-1':''}" style="${isNow?('--tw-ring-color:'+arc.color+'66;box-shadow:0 0 24px '+arc.color+'22'):''}">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-11 h-11 rounded-xl flex items-center justify-center" style="background:${arc.color}1a;border:1px solid ${arc.color}55">
+            <i data-lucide="${arc.icon}" style="width:22px;height:22px;color:${arc.color}"></i>
+          </div>
+          <div>
+            <div class="font-display text-2xl font-bold" style="color:${arc.color}">${arc.year}</div>
+            <div class="text-xs text-slate-400 font-semibold">${esc(arc.title)}</div>
+          </div>
+        </div>
+        <ul class="space-y-2 mt-2">${pts}</ul>
+      </div>
+    </div>`;
+  }).join('');
+  byId('view-timeline').innerHTML = `
+  <div class="mb-3">
+    <h2 class="font-display text-lg font-bold flex items-center gap-2"><i data-lucide="milestone" class="text-amber-400" style="width:20px;height:20px"></i> Campaign Timeline</h2>
+    <p class="text-xs text-slate-300">A four-year radial campaign — 2026 → 2029. Progression is parallel, so these mark focus periods, not hard gates.</p>
+  </div>
+  <div class="tl-track overflow-x-auto pb-3"><div class="flex gap-5 sm:gap-7 min-w-max pt-1">${cards}</div></div>`;
+  icons();
+}
+
+/* =====================================================================
+   16. MODALS  —  node / target / data core
+   ===================================================================== */
+function openModal(id){ byId(id).classList.add('open'); }
+function closeModal(id){ byId(id).classList.remove('open'); }
+
+const DIFF_COLOR = { Easy:'#22c55e', Medium:'#06b6d4', Hard:'#eab308', Legendary:'#ffd700', Grind:'#aab0bd', Origin:'#ffd700' };
+
+function openNode(id){
+  if (_suppressClick) return;
+  const n = getNode(id); if (!n) return;
+  const st = nodeState(n);
+  const dc = DIFF_COLOR[n.diff] || '#aab0bd';
+  const resources = (n.resources||[]).map(r=>`<a href="${esc(r.url)}" target="_blank" rel="noopener" class="flex items-center gap-2 p-2 rounded-lg hover:bg-white/5 res-link !border-0"><i data-lucide="external-link" style="width:14px;height:14px"></i> ${esc(r.name)}</a>`).join('');
+  const prereqList = (n.prereq||[]).map(pid=>{ const p=getNode(pid); const ok=isCompleted(p); return `<span class="chip" style="color:${ok?'#4ade80':'#aab0bd'};border-color:${ok?'#4ade8066':'#ffffff22'};background:${ok?'#4ade8014':'#ffffff08'}">${ok?'✓':'✕'} ${esc(p.name)}</span>`; }).join(' ');
+
+  let actionBtn = '';
+  if (n.id==='hub'){
+    actionBtn = `<div class="text-center text-sm ${architectUnlocked()?'neon-gold':'text-slate-400'}">${architectUnlocked()?'★ Physical AI Architect — all star points mastered ★':'Master all 7 star points to ascend.'}</div>`;
+  } else if (n.counter){
+    const v=S.research[n.counter]||0;
+    actionBtn = `<div class="text-center"><div class="text-sm text-slate-400 mb-2">Progress: <span class="neon-cyan font-bold">${v} / ${n.goal}</span> — tracked in the Research Archive.</div>
+      <button onclick="closeModal('node-modal');switchView('research')" class="btn btn-primary mx-auto"><i data-lucide="microscope" style="width:16px;height:16px"></i> Open Research Archive</button></div>`;
+  } else if (st==='locked'){
+    actionBtn = `<div class="text-center"><div class="text-xs uppercase tracking-wider text-red-400/80 mb-2 flex items-center justify-center gap-1.5"><i data-lucide="lock" style="width:14px;height:14px"></i> Locked — complete prerequisites</div>
+      <div class="flex flex-wrap gap-1.5 justify-center">${prereqList||'<span class="text-slate-300 text-sm">—</span>'}</div></div>`;
+  } else if (st==='completed' || st==='mastered'){
+    actionBtn = `<div class="flex items-center justify-center gap-3">
+      <span class="chip" style="color:#4ade80;border-color:#4ade8066;background:#4ade8014">✓ ${st==='mastered'?'MASTERED':'COMPLETED'}</span>
+      <button onclick="uncompleteNode(getNode('${n.id}'));closeModal('node-modal')" class="btn text-xs"><i data-lucide="undo-2" style="width:14px;height:14px"></i> Mark incomplete</button></div>`;
+  } else {
+    actionBtn = `<button onclick="completeNode(getNode('${n.id}'), this);closeModal('node-modal')" class="btn btn-green w-full justify-center text-base !py-3">
+      <i data-lucide="check-check" style="width:18px;height:18px"></i> Complete &nbsp;<span class="neon-xp">+${n.xp} XP</span>${n.credits?` &nbsp;<span class="text-cyan-200">+${n.credits} ⚡</span>`:''}</button>`;
+  }
+
+  byId('node-modal-card').innerHTML = `
+    <div class="p-5 border-b border-white/10" style="background:linear-gradient(135deg, ${n.color}1f, transparent)">
+      <div class="flex items-start gap-4">
+        <div class="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style="background:${n.color}22;border:2px solid ${n.color}${st==='mastered'?';box-shadow:0 0 18px '+n.color:''}">
+          <i data-lucide="${n.icon}" style="width:26px;height:26px;color:${st==='mastered'?'#ffd700':n.color}"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 flex-wrap mb-1">
+            <span class="chip" style="color:${n.color};border-color:${n.color}66;background:${n.color}14">${esc(n.branch)}</span>
+            <span class="chip" style="color:${dc};border-color:${dc}66;background:${dc}14">${n.diff}</span>
+          </div>
+          <h3 class="font-display text-xl font-bold leading-tight">${esc(n.name)}</h3>
+        </div>
+        <button onclick="closeModal('node-modal')" class="text-slate-300 hover:text-white shrink-0"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+      </div>
+    </div>
+    <div class="p-5 space-y-4">
+      <p class="text-sm text-slate-300 leading-relaxed">${esc(n.desc)}</p>
+      ${n.topics?`<div><div class="text-[11px] uppercase tracking-wider text-slate-300 mb-1">Topics</div><div class="text-sm text-slate-300">${esc(n.topics)}</div></div>`:''}
+      ${n.project?`<div class="p-3 rounded-lg bg-blue-500/10 border border-blue-500/25 text-sm"><span class="text-blue-300 font-bold">⚙ Project Node:</span> ${esc(n.project)}</div>`:''}
+      ${n.boss?`<div class="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm"><span class="text-red-300 font-bold">⚔ ${esc(n.boss)}</span></div>`:''}
+      ${n.title?`<div class="p-3 rounded-lg bg-amber-400/10 border border-amber-400/30 text-sm"><span class="neon-gold font-bold">★ Unlock Title:</span> <span class="text-amber-100">${esc(n.title)}</span></div>`:''}
+      ${resources?`<div><div class="text-[11px] uppercase tracking-wider text-slate-300 mb-1">Verified Curriculum</div><div class="grid grid-cols-1 sm:grid-cols-2 gap-1">${resources}</div></div>`:''}
+      ${(n.prereq&&n.prereq.length)?`<div><div class="text-[11px] uppercase tracking-wider text-slate-300 mb-1.5">Prerequisites</div><div class="flex flex-wrap gap-1.5">${prereqList}</div></div>`:''}
+      <div class="pt-2 border-t border-white/10">${actionBtn}</div>
+    </div>`;
+  openModal('node-modal'); icons();
+}
+
+function openTarget(id){
+  const tg = TARGETS.find(t=>t.id===id); if(!tg) return;
+  S.targetsSeen[id]=true; save();
+  const p = targetProgress(tg);
+  const reqs = tg.req.map(r=>{
+    const met = reqMet(r);
+    let label = r.node ? r.t : `${r.t}: ${(S.research[r.k]||0)} / ${r.n}`;
+    return `<div class="flex items-center gap-2 p-2 rounded-lg ${met?'bg-green-500/8':'bg-white/3'}">
+      <i data-lucide="${met?'check-circle-2':'circle'}" style="width:17px;height:17px;color:${met?'#4ade80':'#8b90a0'}"></i>
+      <span class="text-sm ${met?'text-green-200':'text-slate-300'}">${esc(label)}</span>
+      ${met?'':'<span class="ml-auto text-[10px] uppercase tracking-wider text-slate-400">pending</span>'}
+    </div>`;
+  }).join('');
+  const done = p.met===p.total;
+  byId('target-modal-card').innerHTML = `
+    <div class="flex items-start gap-4 mb-4">
+      <div class="w-14 h-14 rounded-xl flex items-center justify-center shrink-0 ${tg.cat==='Graduate'?'bg-cyan-500/15 text-cyan-300':'bg-purple-500/15 text-purple-300'}" ${done?'style="box-shadow:0 0 18px rgba(255,215,0,0.5);border:1px solid #ffd700"':''}>
+        <i data-lucide="${tg.icon}" style="width:26px;height:26px"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="chip ${tg.cat==='Graduate'?'':''}" style="color:#aab0bd;border-color:#ffffff22;background:#ffffff08">${tg.cat}</div>
+        <h3 class="font-display text-xl font-bold mt-1">${esc(tg.name)}</h3>
+      </div>
+      <button onclick="closeModal('target-modal')" class="text-slate-300 hover:text-white"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+    </div>
+    <p class="text-sm text-slate-400 mb-4">${esc(tg.note)}</p>
+    <div class="text-[11px] uppercase tracking-wider text-slate-300 mb-2">Entry Requirements — ${p.met}/${p.total} met</div>
+    <div class="space-y-1.5">${reqs}</div>
+    ${done?`<div class="mt-4 text-center neon-gold font-display font-bold">★ ALL REQUIREMENTS MET — READY TO APPLY ★</div>`:''}`;
+  openModal('target-modal'); icons();
+}
+
+/* ---- Data Core (save / load / sync) ---- */
+function exportJSON(){ return JSON.stringify(S, null, 2); }
+function openDataCore(){
+  const g = S.github;
+  byId('datacore-modal-card').innerHTML = `
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-display text-lg font-bold flex items-center gap-2"><i data-lucide="database" class="text-cyan-400" style="width:20px;height:20px"></i> Data Core</h3>
+      <button onclick="closeModal('datacore-modal')" class="text-slate-300 hover:text-white"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+    </div>
+
+    <div class="text-[11px] uppercase tracking-wider text-slate-300 mb-1.5">Export Save State</div>
+    <textarea id="dc-export" readonly class="w-full h-28 mono text-xs">${esc(exportJSON())}</textarea>
+    <div class="flex flex-wrap gap-2 mt-2 mb-5">
+      <button onclick="copyState()" class="btn btn-primary"><i data-lucide="clipboard-copy" style="width:16px;height:16px"></i> Copy</button>
+      <button onclick="downloadState()" class="btn"><i data-lucide="download" style="width:16px;height:16px"></i> Download save_state.json</button>
+    </div>
+
+    <div class="text-[11px] uppercase tracking-wider text-slate-300 mb-1.5">Import Save State</div>
+    <textarea id="dc-import" placeholder="Paste a save_state.json here…" class="w-full h-20 mono text-xs"></textarea>
+    <div class="flex flex-wrap gap-2 mt-2 mb-5">
+      <input type="file" id="dc-file" accept="application/json" class="hidden" onchange="loadFile(event)">
+      <button onclick="byId('dc-file').click()" class="btn"><i data-lucide="upload" style="width:16px;height:16px"></i> Load file</button>
+      <button onclick="importState()" class="btn btn-green"><i data-lucide="check" style="width:16px;height:16px"></i> Import & Sync</button>
+    </div>
+
+    <div class="rounded-xl border border-white/10 p-4 mb-4" style="background:rgba(6,182,212,0.05)">
+      <div class="text-[11px] uppercase tracking-wider text-cyan-300/80 mb-2 flex items-center gap-1.5"><i data-lucide="github" style="width:14px;height:14px"></i> Optional — GitHub Sync</div>
+      <p class="text-xs text-slate-300 mb-3">Paste a fine-grained Personal Access Token with <span class="mono">Contents: Read &amp; Write</span> on the target repo to push your progress as <span class="mono">progress.json</span>.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <input id="gh-pat" type="password" placeholder="GitHub PAT (ghp_… / github_pat_…)" value="${esc(g.pat)}" oninput="S.github.pat=this.value;save()" class="sm:col-span-2 text-sm">
+        <input id="gh-repo" placeholder="owner/repository" value="${esc(g.repo)}" oninput="S.github.repo=this.value;save()" class="text-sm">
+        <input id="gh-branch" placeholder="branch (main)" value="${esc(g.branch)}" oninput="S.github.branch=this.value;save()" class="text-sm">
+        <input id="gh-path" placeholder="path (progress.json)" value="${esc(g.path)}" oninput="S.github.path=this.value;save()" class="sm:col-span-2 text-sm">
+      </div>
+      <button onclick="githubCommit(this)" class="btn btn-primary mt-3 w-full justify-center"><i data-lucide="git-commit-vertical" style="width:16px;height:16px"></i> Commit Save State to GitHub</button>
+    </div>
+
+    <button onclick="resetProgress()" class="btn btn-danger w-full justify-center"><i data-lucide="trash-2" style="width:16px;height:16px"></i> Reset all progress</button>`;
+  openModal('datacore-modal'); icons();
+}
+function copyState(){ navigator.clipboard.writeText(exportJSON()).then(()=>toast('Save copied to clipboard'),()=>toast('Clipboard blocked — copy manually')); }
+function downloadState(){ const blob=new Blob([exportJSON()],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='save_state.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href); toast('Downloaded save_state.json'); }
+function loadFile(ev){ const f=ev.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>{ byId('dc-import').value=r.result; toast('File loaded — click Import'); }; r.readAsText(f); }
+function applyImport(parsed){ const d=defaultState(); S=Object.assign(d,parsed); S.research=Object.assign(d.research,parsed.research||{}); S.daily=Object.assign(defaultState().daily,parsed.daily||{}); S.github=Object.assign(defaultState().github,parsed.github||{}); }
+function importState(){ const raw=byId('dc-import').value.trim(); if(!raw){toast('Paste a save first');return;} try{ const parsed=JSON.parse(raw); applyImport(parsed); save(); closeModal('datacore-modal'); ensureDaily(); checkStreakIntegrity(); renderAll(); toast('Save imported ✓'); }catch(e){ toast('Invalid JSON'); } }
+function resetProgress(){ if(confirm('Erase ALL progress? This cannot be undone.')){ S=defaultState(); save(); closeModal('datacore-modal'); ensureDaily(); renderAll(); toast('Progress reset'); } }
+
+async function githubCommit(btn){
+  const pat=(S.github.pat||'').trim(), repo=(S.github.repo||'').trim(), path=(S.github.path||'progress.json').trim()||'progress.json', branch=(S.github.branch||'main').trim()||'main';
+  if(!pat||!repo){ toast('Enter your PAT and owner/repo first'); return; }
+  if(btn){ btn.disabled=true; btn.style.opacity='0.6'; }
+  const api=`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path).replace(/%2F/g,'/')}`;
+  const headers={ 'Authorization':'Bearer '+pat, 'Accept':'application/vnd.github+json', 'X-GitHub-Api-Version':'2022-11-28' };
+  const content=btoa(unescape(encodeURIComponent(exportJSON())));
+  try{
+    let sha;
+    const g=await fetch(api+'?ref='+encodeURIComponent(branch),{headers});
+    if(g.ok){ const j=await g.json(); sha=j.sha; }
+    const res=await fetch(api,{method:'PUT',headers,body:JSON.stringify({message:'chore: update progress.json — Physical AI RPG '+new Date().toISOString(),content,sha,branch})});
+    if(res.ok){ toast('Committed to GitHub ✓'); }
+    else { const e=await res.json().catch(()=>({})); toast('GitHub: '+(e.message||('HTTP '+res.status))); }
+  }catch(err){ toast('Network error — check repo/token'); }
+  finally{ if(btn){ btn.disabled=false; btn.style.opacity='1'; } }
+}
+
+/* =====================================================================
+   17. ANIMATIONS  —  particles + level up + architect
+   ===================================================================== */
+function spawnXPParticles(amount, originEl){
+  const layer=byId('particle-layer'); if(!layer) return;
+  let x=window.innerWidth/2, y=window.innerHeight*0.4;
+  if(originEl && originEl.getBoundingClientRect){ const r=originEl.getBoundingClientRect(); if(r.width){ x=r.left+r.width/2; y=r.top+r.height/2; } }
+  const num=document.createElement('div'); num.className='xp-particle'; num.textContent='+'+amount+' XP';
+  num.style.left=x+'px'; num.style.top=y+'px'; layer.appendChild(num); setTimeout(()=>num.remove(),1300);
+  for(let i=0;i<12;i++){ const s=document.createElement('div'); s.className='spark'; s.style.left=x+'px'; s.style.top=y+'px';
+    const ang=Math.random()*Math.PI*2, dist=24+Math.random()*70;
+    s.style.setProperty('--dx',Math.cos(ang)*dist+'px'); s.style.setProperty('--dy',Math.sin(ang)*dist+'px');
+    layer.appendChild(s); setTimeout(()=>s.remove(),900); }
+}
+function flushLevelups(){
+  if(!_pendingLevelups.length) return;
+  const lvl=_pendingLevelups.shift();
+  byId('levelup-card').innerHTML=`
+    <div class="lu-ring"></div><div class="lu-ring" style="animation-delay:.18s"></div><div class="lu-ring" style="animation-delay:.36s"></div>
+    <div class="relative z-10 px-8">
+      <div class="text-sm tracking-[0.45em] text-cyan-300 mb-3 font-display">▲ LEVEL UP ▲</div>
+      <div class="lu-banner text-5xl sm:text-7xl mb-3">LEVEL ${lvl}</div>
+      <div class="font-display text-base sm:text-lg ${architectUnlocked()?'neon-gold':'text-slate-300'}">${esc(classForLevel())}</div>
+      <button onclick="dismissLevelup()" class="btn btn-primary mt-6">Continue ▸</button>
+    </div>`;
+  openModal('levelup-modal'); icons();
+}
+function dismissLevelup(){ closeModal('levelup-modal'); if(_pendingLevelups.length) setTimeout(flushLevelups,260); }
+function triggerArchitect(){
+  renderAll();
+  byId('levelup-card').innerHTML=`
+    <div class="lu-ring" style="border-color:rgba(255,215,0,.7)"></div><div class="lu-ring" style="animation-delay:.2s;border-color:rgba(255,215,0,.5)"></div><div class="lu-ring" style="animation-delay:.4s;border-color:rgba(255,215,0,.4)"></div>
+    <div class="relative z-10 px-8">
+      <div class="text-sm tracking-[0.4em] neon-gold mb-3 font-display">✦ LEGENDARY CLASS UNLOCKED ✦</div>
+      <div class="lu-banner text-4xl sm:text-6xl mb-3" style="background:linear-gradient(90deg,#ffd700,#fff6c2,#ffd700);-webkit-background-clip:text;background-clip:text;color:transparent">PHYSICAL AI ARCHITECT</div>
+      <div class="font-display text-base text-amber-100/90">All seven star points converge. The star is complete.</div>
+      <button onclick="dismissLevelup()" class="btn btn-primary mt-6">Ascend ▸</button>
+    </div>`;
+  openModal('levelup-modal'); icons();
+  for(let i=0;i<60;i++){ const s=document.createElement('div'); s.className='spark'; s.style.background='#ffd700'; s.style.boxShadow='0 0 8px #ffd700';
+    s.style.left=(window.innerWidth/2)+'px'; s.style.top=(window.innerHeight/2)+'px';
+    const ang=Math.random()*Math.PI*2, dist=80+Math.random()*260; s.style.setProperty('--dx',Math.cos(ang)*dist+'px'); s.style.setProperty('--dy',Math.sin(ang)*dist+'px');
+    byId('particle-layer').appendChild(s); setTimeout(()=>s.remove(),900); }
+}
+
+/* =====================================================================
+   18. NAVIGATION + PAN/ZOOM + INIT
+   ===================================================================== */
+function switchView(v){
+  document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
+  const t=byId('view-'+v); if(t)t.classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.view===v));
+  if(v==='matrix') requestAnimationFrame(()=>{ if(!treeView.init) centerTree(false); else applyTreeTransform(); });
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+let _drag={active:false,sx:0,sy:0,ox:0,oy:0,moved:false};
+let _suppressClick=false;
+function attachTreeEvents(){
+  const vp=byId('tree-viewport'); if(!vp) return;
+  vp.addEventListener('mousedown', e=>{ _drag={active:true,sx:e.clientX,sy:e.clientY,ox:treeView.x,oy:treeView.y,moved:false}; vp.classList.add('dragging'); });
+  vp.addEventListener('wheel', e=>{ e.preventDefault(); const rect=vp.getBoundingClientRect(); const mx=e.clientX-rect.left, my=e.clientY-rect.top; const factor=e.deltaY<0?1.1:0.9; const ns=Math.max(0.2,Math.min(1.6,treeView.scale*factor)); treeView.x=mx-(mx-treeView.x)*(ns/treeView.scale); treeView.y=my-(my-treeView.y)*(ns/treeView.scale); treeView.scale=ns; applyTreeTransform(); }, {passive:false});
+  let lastDist=0;
+  vp.addEventListener('touchstart', e=>{ if(e.touches.length===1){ _drag={active:true,sx:e.touches[0].clientX,sy:e.touches[0].clientY,ox:treeView.x,oy:treeView.y,moved:false}; } });
+  vp.addEventListener('touchmove', e=>{ if(e.touches.length===1&&_drag.active){ treeView.x=_drag.ox+(e.touches[0].clientX-_drag.sx); treeView.y=_drag.oy+(e.touches[0].clientY-_drag.sy); applyTreeTransform(); e.preventDefault(); } else if(e.touches.length===2){ const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); if(lastDist){ const ns=Math.max(0.2,Math.min(1.6,treeView.scale*(d/lastDist))); treeView.scale=ns; applyTreeTransform(); } lastDist=d; e.preventDefault(); } }, {passive:false});
+  vp.addEventListener('touchend', ()=>{ _drag.active=false; lastDist=0; });
+}
+function initGlobalDrag(){
+  window.addEventListener('mousemove', e=>{ if(!_drag.active) return; const dx=e.clientX-_drag.sx, dy=e.clientY-_drag.sy; if(Math.abs(dx)+Math.abs(dy)>4) _drag.moved=true; treeView.x=_drag.ox+dx; treeView.y=_drag.oy+dy; applyTreeTransform(); });
+  window.addEventListener('mouseup', ()=>{ if(_drag.active){ const vp=byId('tree-viewport'); if(vp)vp.classList.remove('dragging'); if(_drag.moved){ _suppressClick=true; setTimeout(()=>_suppressClick=false,30); } _drag.active=false; } });
+}
+
+// patch renderMatrix to (re)attach events after build
+const _renderMatrixBase = renderMatrix;
+renderMatrix = function(){ _renderMatrixBase(); attachTreeEvents(); };
+
+function init(){
+  ensureDaily();
+  checkStreakIntegrity();
+  initGlobalDrag();
+  document.querySelectorAll('.nav-btn').forEach(b=> b.addEventListener('click', ()=>switchView(b.dataset.view)) );
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ ['node-modal','target-modal','datacore-modal'].forEach(closeModal); } });
+  renderAll();
+  // entrance: small XP pop to confirm engine is live (no real XP)
+  setTimeout(()=>icons(), 60);
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init); else init();
